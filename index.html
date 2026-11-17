@@ -1,0 +1,610 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spin Wheel</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f3f4f8;
+    color: #222;
+}
+
+.container {
+    max-width: 1050px;
+    margin: 40px auto;
+    padding: 20px;
+}
+
+h1 {
+    text-align: center;
+    color: #5936c8;
+}
+
+.subtitle {
+    text-align: center;
+    color: #777;
+    margin-bottom: 30px;
+}
+
+.content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    align-items: center;
+}
+
+.panel {
+    background: white;
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px #00000010;
+}
+
+textarea {
+    width: 100%;
+    height: 200px;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    resize: vertical;
+    font-family: Arial;
+    line-height: 1.6;
+}
+
+select, button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 12px;
+    border-radius: 8px;
+    border: none;
+    font-size: 15px;
+}
+
+select {
+    border: 1px solid #ddd;
+}
+
+button {
+    cursor: pointer;
+    font-weight: bold;
+    background: #673de6;
+    color: white;
+}
+
+button:hover {
+    opacity: .85;
+}
+
+button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.random {
+    background: #159b70;
+}
+
+.reset {
+    background: #e74c3c;
+}
+
+.wheel-area {
+    position: relative;
+    text-align: center;
+}
+
+canvas {
+    width: 100%;
+    max-width: 420px;
+    height: auto;
+}
+
+.pointer {
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    font-size: 35px;
+    color: #e74c3c;
+}
+
+#result {
+    margin-top: 20px;
+    padding: 20px;
+    background: #f1edff;
+    border-radius: 12px;
+    text-align: center;
+    font-size: 22px;
+    font-weight: bold;
+    color: #5936c8;
+    overflow-wrap: anywhere;
+}
+
+.info {
+    color: #777;
+    font-size: 13px;
+    margin-top: 10px;
+}
+
+#adminPanel {
+    display: none;
+    margin-top: 25px;
+    padding: 18px;
+    background: #fff4e5;
+    border: 1px dashed #e49b30;
+    border-radius: 10px;
+}
+
+.admin-label {
+    font-size: 12px;
+    color: #9a681f;
+    font-weight: bold;
+}
+
+@media(max-width: 750px) {
+    .content {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>SPIN WHEEL</h1>
+    <p class="subtitle">Wheel of Names - Random Picker</p>
+
+    <div class="content">
+
+        <!-- PANEL PESERTA -->
+        <div class="panel">
+
+            <h2>Daftar Peserta</h2>
+
+            <textarea id="names">Andi
+Budi
+Citra
+Dewi
+Eka
+Fajar
+Gita
+Hendra</textarea>
+
+            <button id="updateButton" onclick="updateWheel()">
+                Perbarui Peserta
+            </button>
+
+            <p class="info">
+                Masukkan satu nama pada setiap baris.
+            </p>
+
+            <!-- PANEL ADMIN TERSEMBUNYI -->
+            <div id="adminPanel">
+
+                <span class="admin-label">ADMIN ONLY</span>
+
+                <h2>Pengaturan Pemenang</h2>
+
+                <label for="winner">
+                    Pilih pemenang:
+                </label>
+
+                <select id="winner">
+                    <option value="">-- Pilih Pemenang --</option>
+                </select>
+
+                <button class="reset" onclick="clearWinner()">
+                    Hapus Pengaturan Pemenang
+                </button>
+
+                <p class="info">
+                    Pengaturan ini hanya untuk simulasi
+                    atau demonstrasi.
+                </p>
+
+            </div>
+
+            <p class="info">
+                Shortcut admin: Ctrl + Shift + A
+            </p>
+
+        </div>
+
+        <!-- PANEL RODA -->
+        <div class="panel wheel-area">
+
+            <div class="pointer">▼</div>
+
+            <canvas id="wheel" width="500" height="500"></canvas>
+
+            <button id="spinButton" onclick="spinWheel()">
+                PUTAR RODA
+            </button>
+
+            <button class="random" id="randomButton"
+                    onclick="randomWinner()">
+                ACAK PEMENANG
+            </button>
+
+            <button class="reset" id="resetButton"
+                    onclick="resetWheel()">
+                RESET
+            </button>
+
+            <div id="result">
+                Siapa yang akan menang?
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d");
+
+const nameInput = document.getElementById("names");
+const winnerSelect = document.getElementById("winner");
+const result = document.getElementById("result");
+const adminPanel = document.getElementById("adminPanel");
+
+let participants = [];
+let rotation = 0;
+let spinning = false;
+
+// null berarti mode acak
+let selectedWinner = null;
+
+const colors = [
+    "#FF6384",
+    "#36A2EB",
+    "#FFCE56",
+    "#4BC0C0",
+    "#9966FF",
+    "#FF9F40",
+    "#6BCB77",
+    "#E78FB3"
+];
+
+// ==================================
+// SHORTCUT ADMIN
+// ==================================
+
+document.addEventListener("keydown", function(event) {
+
+    if (
+        event.ctrlKey &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "a"
+    ) {
+
+        event.preventDefault();
+
+        if (spinning) return;
+
+        if (adminPanel.style.display === "block") {
+            adminPanel.style.display = "none";
+        } else {
+            adminPanel.style.display = "block";
+        }
+
+    }
+
+});
+
+// ==================================
+// MENGGAMBAR RODA
+// ==================================
+
+function drawWheel() {
+
+    const total = participants.length;
+
+    ctx.clearRect(0, 0, 500, 500);
+
+    if (total === 0) {
+
+        ctx.fillStyle = "#ddd";
+        ctx.beginPath();
+        ctx.arc(250, 250, 240, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#333";
+        ctx.font = "20px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("Tambahkan peserta", 250, 250);
+
+        return;
+    }
+
+    const arc = (Math.PI * 2) / total;
+
+    participants.forEach((name, i) => {
+
+        const start = rotation + i * arc - Math.PI / 2;
+        const end = start + arc;
+
+        ctx.beginPath();
+        ctx.moveTo(250, 250);
+        ctx.arc(250, 250, 240, start, end);
+        ctx.closePath();
+
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fill();
+
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Teks peserta
+        ctx.save();
+
+        ctx.translate(250, 250);
+        ctx.rotate(start + arc / 2);
+
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 15px Arial";
+
+        let label = name;
+
+        if (label.length > 18) {
+            label = label.substring(0, 16) + "...";
+        }
+
+        ctx.fillText(label, 215, 0);
+
+        ctx.restore();
+
+    });
+
+    // Lingkaran tengah
+    ctx.beginPath();
+    ctx.arc(250, 250, 35, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+
+    ctx.strokeStyle = "#673de6";
+    ctx.lineWidth = 5;
+    ctx.stroke();
+
+}
+
+// ==================================
+// MEMPERBARUI PESERTA
+// ==================================
+
+function updateWheel() {
+
+    if (spinning) return;
+
+    participants = nameInput.value
+        .split("\n")
+        .map(name => name.trim())
+        .filter(name => name !== "");
+
+    // Menghapus nama duplikat
+    participants = [...new Set(participants)];
+
+    winnerSelect.innerHTML =
+        '<option value="">-- Pilih Pemenang --</option>';
+
+    participants.forEach((name, index) => {
+
+        const option = document.createElement("option");
+
+        option.value = index;
+        option.textContent = name;
+
+        winnerSelect.appendChild(option);
+
+    });
+
+    selectedWinner = null;
+    winnerSelect.value = "";
+
+    rotation = 0;
+
+    result.textContent = "Siapa yang akan menang?";
+
+    drawWheel();
+
+}
+
+// ==================================
+// MENGATUR PEMENANG RAHASIA
+// ==================================
+
+winnerSelect.addEventListener("change", function() {
+
+    if (this.value === "") {
+        selectedWinner = null;
+    } else {
+        selectedWinner = Number(this.value);
+    }
+
+});
+
+// Menghapus pengaturan pemenang
+function clearWinner() {
+
+    selectedWinner = null;
+    winnerSelect.value = "";
+
+    alert("Pengaturan pemenang berhasil dikosongkan.");
+
+}
+
+// ==================================
+// ANIMASI PUTAR RODA
+// ==================================
+
+function spinWheel() {
+
+    if (spinning) return;
+
+    if (participants.length < 2) {
+        alert("Tambahkan minimal 2 peserta!");
+        return;
+    }
+
+    let index;
+
+    if (selectedWinner !== null) {
+
+        index = selectedWinner;
+
+    } else {
+
+        index = Math.floor(
+            Math.random() * participants.length
+        );
+
+    }
+
+    spinning = true;
+
+    setButtonsDisabled(true);
+
+    result.textContent = "Roda sedang berputar...";
+
+    const arc = (Math.PI * 2) / participants.length;
+
+    // Sudut akhir sesuai pemenang
+    const targetAngle = -(index + 0.5) * arc;
+
+    const startRotation = rotation;
+
+    const minRotation = startRotation + Math.PI * 2 * 5;
+
+    const turns = Math.ceil(
+        (minRotation - targetAngle) / (Math.PI * 2)
+    );
+
+    const finalRotation =
+        targetAngle + turns * Math.PI * 2;
+
+    const duration = 5000;
+
+    const startTime = performance.now();
+
+    function animate(currentTime) {
+
+        const elapsed = currentTime - startTime;
+
+        let progress = Math.min(elapsed / duration, 1);
+
+        // Efek perlambatan
+        const ease = 1 - Math.pow(1 - progress, 4);
+
+        rotation = startRotation +
+            (finalRotation - startRotation) * ease;
+
+        drawWheel();
+
+        if (progress < 1) {
+
+            requestAnimationFrame(animate);
+
+        } else {
+
+            rotation = finalRotation;
+
+            drawWheel();
+
+            spinning = false;
+
+            setButtonsDisabled(false);
+
+            result.textContent =
+                "PEMENANG: " + participants[index];
+
+        }
+
+    }
+
+    requestAnimationFrame(animate);
+
+}
+
+// ==================================
+// MODE ACAK
+// ==================================
+
+function randomWinner() {
+
+    if (spinning) return;
+
+    // Mode acak mengabaikan pilihan admin
+    selectedWinner = null;
+
+    winnerSelect.value = "";
+
+    spinWheel();
+
+}
+
+// ==================================
+// RESET
+// ==================================
+
+function resetWheel() {
+
+    if (spinning) return;
+
+    rotation = 0;
+
+    selectedWinner = null;
+
+    winnerSelect.value = "";
+
+    result.textContent = "Siapa yang akan menang?";
+
+    drawWheel();
+
+}
+
+// ==================================
+// NONAKTIFKAN TOMBOL SAAT BERPUTAR
+// ==================================
+
+function setButtonsDisabled(status) {
+
+    document.getElementById("spinButton").disabled = status;
+
+    document.getElementById("randomButton").disabled = status;
+
+    document.getElementById("resetButton").disabled = status;
+
+    document.getElementById("updateButton").disabled = status;
+
+    winnerSelect.disabled = status;
+
+}
+
+// ==================================
+// INISIALISASI
+// ==================================
+
+updateWheel();
+
+</script>
+
+</body>
+</html>
